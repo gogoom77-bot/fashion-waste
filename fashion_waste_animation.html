@@ -285,16 +285,10 @@
     z-index: 8;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s;
+    transition: opacity 0s;
   }
-  #loading.show { opacity: 1; }
-  .spinner {
-    width: 40px; height: 40px;
-    border: 3px solid rgba(56,189,248,0.2);
-    border-top-color: var(--accent1);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
+  #loading.show { opacity: 0; } /* 로딩 화면 숨김 — 검은 화면 없앰 */
+  .spinner { display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* RESPONSIVE */
@@ -304,26 +298,28 @@
     #branch2-overlay .question-box { padding: 18px 20px; }
   }
 
-  /* NAVIGATION BUTTONS */
+  /* NAVIGATION BUTTONS — 오른쪽 세로 배치 */
   #nav-bar {
     position: absolute;
-    top: 16px; left: 50%;
-    transform: translateX(-50%);
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
     display: none;
+    flex-direction: column;
     gap: 10px;
     z-index: 6;
-    align-items: center;
+    align-items: flex-end;
   }
   #nav-bar.show { display: flex; }
   .nav-btn {
-    padding: 8px 16px;
+    padding: 8px 14px;
     border-radius: 100px;
     border: 1px solid rgba(255,255,255,0.25);
     background: rgba(10,14,26,0.75);
     backdrop-filter: blur(6px);
     color: var(--text);
     font-family: 'Nunito', sans-serif;
-    font-size: 13px; font-weight: 700;
+    font-size: 12px; font-weight: 700;
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s, transform 0.15s;
     display: flex; align-items: center; gap: 6px;
@@ -335,7 +331,25 @@
     transform: scale(1.04);
   }
   .nav-btn:active { transform: scale(0.96); }
-  .nav-btn.pause-btn { min-width: 44px; justify-content: center; }
+  .nav-btn.pause-btn { justify-content: center; }
+
+  /* RETRY BUTTON */
+  #retry-btn {
+    margin-top: 16px;
+    padding: 12px 32px;
+    background: transparent;
+    border: 1.5px solid var(--accent3);
+    border-radius: 100px;
+    color: var(--accent3);
+    font-family: 'Nunito', sans-serif;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    display: none;
+  }
+  #retry-btn.show { display: block; }
+  #retry-btn:hover { background: rgba(245,158,11,0.15); transform: scale(1.04); }
+  #retry-btn:active { transform: scale(0.96); }
 </style>
 </head>
 <body>
@@ -394,6 +408,7 @@
       <div class="feedback-icon" id="feedback-icon"></div>
       <div class="feedback-text" id="feedback-text"></div>
       <div class="feedback-sub" id="feedback-sub"></div>
+      <button id="retry-btn" onclick="retryQuestion()">🔄 다시하기</button>
     </div>
 
     <!-- PROGRESS -->
@@ -564,25 +579,51 @@ function skipToWrong() {
 }
 
 // ─── FEEDBACK ────────────────────────────────────────────────
+let feedbackTimeout = null;
+let lastCorrect = false;
+
 function showFeedback(correct, heard) {
   hideBranch2();
+  lastCorrect = correct;
   const overlay = document.getElementById('feedback-overlay');
+  const retryBtn = document.getElementById('retry-btn');
   document.getElementById('feedback-icon').textContent = correct ? '✅' : '❌';
   document.getElementById('feedback-text').textContent = correct
     ? 'Great answer!' : 'Not quite!';
   document.getElementById('feedback-sub').textContent = correct
     ? `"${heard}" — that's right!`
     : `You said: "${heard}". Let's try again with a hint.`;
+
+  // 다시하기 버튼: 오답일 때만 표시
+  retryBtn.classList.toggle('show', !correct);
+
   overlay.classList.add('active');
-  setTimeout(() => {
-    overlay.classList.remove('active');
-    // 2a → 3a/3b, 2b → 3c/3d
-    if (currentBranch === '2a') {
-      playScene(correct ? 'scene3a' : 'scene3b');
-    } else {
-      playScene(correct ? 'scene3c' : 'scene3d');
-    }
-  }, 2000);
+
+  // 정답이면 2초 후 자동 이동, 오답이면 자동 이동 없음
+  if (correct) {
+    feedbackTimeout = setTimeout(() => {
+      overlay.classList.remove('active');
+      retryBtn.classList.remove('show');
+      if (currentBranch === '2a') playScene('scene3a');
+      else playScene('scene3c');
+    }, 2000);
+  } else {
+    // 오답: 3초 후 자동으로 힌트 영상으로 이동 (다시하기 안 누르면)
+    feedbackTimeout = setTimeout(() => {
+      overlay.classList.remove('active');
+      retryBtn.classList.remove('show');
+      if (currentBranch === '2a') playScene('scene3b');
+      else playScene('scene3d');
+    }, 3500);
+  }
+}
+
+function retryQuestion() {
+  // 타이머 취소 후 음성인식 다시 시작
+  if (feedbackTimeout) clearTimeout(feedbackTimeout);
+  document.getElementById('feedback-overlay').classList.remove('active');
+  document.getElementById('retry-btn').classList.remove('show');
+  showBranch2();
 }
 
 // ─── VIDEO CONTROL ───────────────────────────────────────────
@@ -643,6 +684,8 @@ function hideAllOverlays() {
   document.getElementById('branch1-overlay').classList.remove('active');
   hideBranch2();
   document.getElementById('feedback-overlay').classList.remove('active');
+  document.getElementById('retry-btn').classList.remove('show');
+  if (feedbackTimeout) clearTimeout(feedbackTimeout);
 }
 
 player.addEventListener('ended', onVideoEnded);
