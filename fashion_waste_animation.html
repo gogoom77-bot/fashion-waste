@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fashion Waste: A Growing Problem</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Nunito+Sans:wght@400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --accent1: #38bdf8;
+    --accent2: #34d399;
+    --accent3: #f59e0b;
+    --wrong: #f87171;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --radius: 16px;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Nunito Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  #app {
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+
+  /* VIDEO CONTAINER */
+  #video-wrap {
+    position: relative;
+    width: 100%; height: 100%;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  video {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  /* OVERLAY BASE */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 14, 26, 0.82);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    padding: 24px;
+    z-index: 10;
+  }
+  .overlay.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* INTRO SCREEN */
+  #intro-screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #0a0e1a 0%, #0f2137 100%);
+    z-index: 20;
+    gap: 20px;
+    padding: 32px;
+    text-align: center;
+  }
+  #intro-screen .badge {
+    font-family: 'Nunito', sans-serif;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: var(--accent1);
+    border: 1px solid var(--accent1);
+    padding: 6px 16px; border-radius: 100px;
+  }
+  #intro-screen h1 {
+    font-family: 'Nunito', sans-serif;
+    font-size: clamp(22px, 5vw, 40px);
+    font-weight: 800;
+    line-height: 1.2;
+    color: var(--text);
+  }
+  #intro-screen h1 span { color: var(--accent1); }
+  #intro-screen p {
+    font-size: clamp(13px, 2.5vw, 16px);
+    color: var(--text-muted);
+    max-width: 440px;
+    line-height: 1.7;
+  }
+  #start-btn {
+    margin-top: 8px;
+    padding: 14px 40px;
+    background: var(--accent1);
+    color: #0a0e1a;
+    border: none; border-radius: 100px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 16px; font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 0 28px rgba(56,189,248,0.4);
+  }
+  #start-btn:hover { transform: scale(1.05); box-shadow: 0 0 40px rgba(56,189,248,0.6); }
+  #start-btn:active { transform: scale(0.97); }
+
+  /* BRANCH 1 — CLICK */
+  #branch1-overlay .branch-title {
+    font-family: 'Nunito', sans-serif;
+    font-size: clamp(16px, 3.5vw, 24px);
+    font-weight: 800;
+    color: var(--text);
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  #branch1-overlay .branch-sub {
+    font-size: clamp(12px, 2vw, 14px);
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .branch-buttons {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .branch-btn {
+    padding: 16px 28px;
+    border: none; border-radius: var(--radius);
+    font-family: 'Nunito', sans-serif;
+    font-size: clamp(13px, 2.5vw, 16px);
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    max-width: 260px;
+    line-height: 1.4;
+    text-align: center;
+  }
+  .branch-btn.problem {
+    background: linear-gradient(135deg, #1e3a5f, #0f4c75);
+    color: var(--accent1);
+    border: 1.5px solid var(--accent1);
+    box-shadow: 0 0 20px rgba(56,189,248,0.2);
+  }
+  .branch-btn.solution {
+    background: linear-gradient(135deg, #0d3b2e, #0f4c35);
+    color: var(--accent2);
+    border: 1.5px solid var(--accent2);
+    box-shadow: 0 0 20px rgba(52,211,153,0.2);
+  }
+  .branch-btn:hover { transform: scale(1.05); }
+  .branch-btn:active { transform: scale(0.97); }
+
+  /* BRANCH 2 — SPEECH */
+  #branch2-overlay .question-box {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--radius);
+    padding: 24px 32px;
+    max-width: 520px;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  #branch2-overlay .q-label {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent3);
+    margin-bottom: 10px;
+  }
+  #branch2-overlay .q-text {
+    font-family: 'Nunito', sans-serif;
+    font-size: clamp(15px, 3vw, 20px);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  #mic-btn {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent1);
+    color: #0a0e1a;
+    font-size: 32px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 0 28px rgba(56,189,248,0.4);
+    margin-bottom: 16px;
+    position: relative;
+  }
+  #mic-btn.listening {
+    background: var(--wrong);
+    box-shadow: 0 0 40px rgba(248,113,113,0.6);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+  #mic-hint {
+    font-size: clamp(12px, 2vw, 14px);
+    color: var(--text-muted);
+    text-align: center;
+  }
+  #speech-result {
+    margin-top: 12px;
+    font-size: clamp(13px, 2vw, 15px);
+    color: var(--accent2);
+    min-height: 22px;
+    text-align: center;
+    font-style: italic;
+  }
+  #skip-btn {
+    margin-top: 20px;
+    padding: 10px 24px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 100px;
+    color: var(--text-muted);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    font-family: 'Nunito Sans', sans-serif;
+  }
+  #skip-btn:hover { border-color: var(--wrong); color: var(--wrong); }
+
+  /* FEEDBACK */
+  #feedback-overlay .feedback-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+  #feedback-overlay .feedback-text {
+    font-family: 'Nunito', sans-serif;
+    font-size: clamp(18px, 4vw, 28px);
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  #feedback-overlay .feedback-sub {
+    font-size: clamp(13px, 2vw, 15px);
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  /* PROGRESS DOTS */
+  #progress {
+    position: absolute;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 8px;
+    z-index: 5;
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: background 0.3s, transform 0.3s;
+  }
+  .dot.active { background: var(--accent1); transform: scale(1.3); }
+  .dot.done { background: rgba(56,189,248,0.4); }
+
+  /* LOADING */
+  #loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #000;
+    z-index: 8;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  #loading.show { opacity: 1; }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(56,189,248,0.2);
+    border-top-color: var(--accent1);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* RESPONSIVE */
+  @media (max-width: 480px) {
+    .branch-buttons { flex-direction: column; align-items: center; }
+    .branch-btn { max-width: 100%; width: 100%; }
+    #branch2-overlay .question-box { padding: 18px 20px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- INTRO SCREEN -->
+  <div id="intro-screen">
+    <div class="badge">중학교 영어 · Reading Activity</div>
+    <h1>Fashion Waste:<br><span>A Growing Problem</span></h1>
+    <p>Watch the story, make choices, and answer questions using your voice!</p>
+    <button id="start-btn" onclick="startAnimation()">▶ Start</button>
+  </div>
+
+  <!-- VIDEO WRAP -->
+  <div id="video-wrap">
+    <video id="player" playsinline webkit-playsinline></video>
+
+    <!-- LOADING -->
+    <div id="loading"><div class="spinner"></div></div>
+
+    <!-- BRANCH 1: CLICK OVERLAY -->
+    <div class="overlay" id="branch1-overlay">
+      <div class="branch-title">What would you like to explore?</div>
+      <div class="branch-sub">Choose a path to continue the story</div>
+      <div class="branch-buttons">
+        <button class="branch-btn problem" onclick="chooseBranch('2a')">
+          🔍 Learn more about<br>the problem
+        </button>
+        <button class="branch-btn solution" onclick="chooseBranch('2b')">
+          💡 Discover the<br>solutions
+        </button>
+      </div>
+    </div>
+
+    <!-- BRANCH 2: SPEECH OVERLAY -->
+    <div class="overlay" id="branch2-overlay">
+      <div class="question-box">
+        <div class="q-label">🎤 Your Turn to Answer</div>
+        <div class="q-text" id="q-text"></div>
+      </div>
+      <button id="mic-btn" onclick="toggleListening()">🎤</button>
+      <div id="mic-hint">Tap the mic and speak your answer</div>
+      <div id="speech-result"></div>
+      <button id="skip-btn" onclick="skipToWrong()">Skip → Show hint</button>
+    </div>
+
+    <!-- FEEDBACK OVERLAY (brief) -->
+    <div class="overlay" id="feedback-overlay">
+      <div class="feedback-icon" id="feedback-icon"></div>
+      <div class="feedback-text" id="feedback-text"></div>
+      <div class="feedback-sub" id="feedback-sub"></div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div id="progress">
+      <div class="dot" id="dot0"></div>
+      <div class="dot" id="dot1"></div>
+      <div class="dot" id="dot2"></div>
+      <div class="dot" id="dot3"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── VIDEO SOURCES ───────────────────────────────────────────
+// 영상 파일을 호스팅한 후 아래 URL을 교체하세요.
+// GitHub Pages, Google Drive 공유링크 등 HTTPS URL이어야 합니다.
+const VIDEOS = {
+  scene0:  'https://gogoom77-bot.github.io/fashion-waste/scene_0_intro.mp4',
+  scene1:  'https://gogoom77-bot.github.io/fashion-waste/scene_1_fastfashion.mp4.mp4',
+  scene2a: 'https://gogoom77-bot.github.io/fashion-waste/scene_2a_problem.mp4',
+  scene2b: 'https://gogoom77-bot.github.io/fashion-waste/scene_2b_solution.mp4',
+  scene3a: 'https://gogoom77-bot.github.io/fashion-waste/scene_3a_correct.mp4',
+  scene3b: 'https://gogoom77-bot.github.io/fashion-waste/scene_3b_wrong.mp4',
+};
+
+// ─── QUESTIONS & ANSWERS ─────────────────────────────────────
+const QUESTIONS = {
+  '2a': {
+    text: 'What do we call the tiny pieces of plastic that come from washing clothes?',
+    keywords: ['microplastic', 'micro plastic', 'microplastics', 'micro plastics', 'plastic'],
+    threshold: 0.75,
+  },
+  '2b': {
+    text: 'Name one group in Chile that is helping to solve the clothing waste problem.',
+    keywords: ['ecocitex', 'eco citex', 'desierto', 'desierto vestido', 'vestido', 'chile'],
+    threshold: 0.70,
+  },
+};
+
+// ─── STATE ───────────────────────────────────────────────────
+let currentScene = null;
+let currentBranch = null;
+let recognition = null;
+let isListening = false;
+let speechSupported = false;
+
+const player = document.getElementById('player');
+const loading = document.getElementById('loading');
+
+// ─── SPEECH RECOGNITION SETUP ────────────────────────────────
+function initSpeech() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { speechSupported = false; return; }
+  speechSupported = true;
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 5;
+
+  recognition.onresult = (e) => {
+    let interim = '';
+    let final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    const heard = (final || interim).toLowerCase().trim();
+    document.getElementById('speech-result').textContent = heard ? `"${heard}"` : '';
+    if (final) {
+      stopListening();
+      evaluateAnswer(heard);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    stopListening();
+    if (e.error === 'no-speech') {
+      document.getElementById('speech-result').textContent = 'No speech detected. Try again.';
+    } else if (e.error === 'not-allowed') {
+      document.getElementById('speech-result').textContent = 'Microphone access denied. Please allow mic access.';
+    }
+  };
+
+  recognition.onend = () => { stopListening(); };
+}
+
+// ─── LEVENSHTEIN DISTANCE ────────────────────────────────────
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, (_, i) =>
+    Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0)
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function similarity(a, b) {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+function isCorrect(heard, branch) {
+  const q = QUESTIONS[branch];
+  const heardWords = heard.toLowerCase().split(/\s+/);
+  for (const keyword of q.keywords) {
+    // 1) 전체 문장에 키워드 포함 여부
+    if (heard.includes(keyword)) return true;
+    // 2) 유사도 기반 (각 단어 vs 키워드)
+    for (const word of heardWords) {
+      if (similarity(word, keyword) >= q.threshold) return true;
+    }
+    // 3) 전체 문장 vs 키워드 유사도
+    if (similarity(heard, keyword) >= q.threshold) return true;
+  }
+  return false;
+}
+
+// ─── MIC CONTROL ─────────────────────────────────────────────
+function toggleListening() {
+  if (isListening) { stopListening(); return; }
+  if (!speechSupported) {
+    document.getElementById('speech-result').textContent =
+      'Speech recognition not supported in this browser. Please use Chrome.';
+    return;
+  }
+  startListening();
+}
+
+function startListening() {
+  isListening = true;
+  document.getElementById('mic-btn').classList.add('listening');
+  document.getElementById('mic-btn').textContent = '⏹';
+  document.getElementById('mic-hint').textContent = 'Listening... speak now!';
+  document.getElementById('speech-result').textContent = '';
+  try { recognition.start(); } catch(e) {}
+}
+
+function stopListening() {
+  isListening = false;
+  const btn = document.getElementById('mic-btn');
+  btn.classList.remove('listening');
+  btn.textContent = '🎤';
+  document.getElementById('mic-hint').textContent = 'Tap the mic and speak your answer';
+  try { recognition.stop(); } catch(e) {}
+}
+
+function evaluateAnswer(heard) {
+  const correct = isCorrect(heard, currentBranch);
+  showFeedback(correct, heard);
+}
+
+function skipToWrong() {
+  hideBranch2();
+  playScene('scene3b');
+}
+
+// ─── FEEDBACK ────────────────────────────────────────────────
+function showFeedback(correct, heard) {
+  hideBranch2();
+  const overlay = document.getElementById('feedback-overlay');
+  document.getElementById('feedback-icon').textContent = correct ? '✅' : '❌';
+  document.getElementById('feedback-text').textContent = correct
+    ? 'Great answer!' : 'Not quite!';
+  document.getElementById('feedback-sub').textContent = correct
+    ? `"${heard}" — that's right!`
+    : `You said: "${heard}". Let's try again with a hint.`;
+  overlay.classList.add('active');
+  setTimeout(() => {
+    overlay.classList.remove('active');
+    playScene(correct ? 'scene3a' : 'scene3b');
+  }, 2000);
+}
+
+// ─── VIDEO CONTROL ───────────────────────────────────────────
+function loadAndPlay(src) {
+  loading.classList.add('show');
+  player.src = src;
+  player.load();
+  player.oncanplay = () => {
+    loading.classList.remove('show');
+    player.play().catch(() => {});
+  };
+  player.onerror = () => {
+    loading.classList.remove('show');
+    console.error('Video load error:', src);
+  };
+}
+
+function playScene(scene) {
+  currentScene = scene;
+  updateProgress(scene);
+  loadAndPlay(VIDEOS[scene]);
+}
+
+player.addEventListener('ended', onVideoEnded);
+
+function onVideoEnded() {
+  if (currentScene === 'scene0') {
+    playScene('scene1');
+  } else if (currentScene === 'scene1') {
+    showBranch1();
+  } else if (currentScene === 'scene2a' || currentScene === 'scene2b') {
+    currentBranch = currentScene === 'scene2a' ? '2a' : '2b';
+    showBranch2();
+  }
+  // scene3a, scene3b: 영상 종료 후 아무것도 안 함 (마지막)
+}
+
+// ─── BRANCH CONTROL ──────────────────────────────────────────
+function showBranch1() {
+  document.getElementById('branch1-overlay').classList.add('active');
+}
+function hideBranch1() {
+  document.getElementById('branch1-overlay').classList.remove('active');
+}
+
+function chooseBranch(branch) {
+  hideBranch1();
+  playScene(branch === '2a' ? 'scene2a' : 'scene2b');
+}
+
+function showBranch2() {
+  document.getElementById('q-text').textContent = QUESTIONS[currentBranch].text;
+  document.getElementById('speech-result').textContent = '';
+  document.getElementById('branch2-overlay').classList.add('active');
+  if (!speechSupported) {
+    document.getElementById('mic-hint').textContent =
+      'Speech not supported. Use the Skip button below.';
+  }
+}
+function hideBranch2() {
+  stopListening();
+  document.getElementById('branch2-overlay').classList.remove('active');
+}
+
+// ─── PROGRESS ────────────────────────────────────────────────
+function updateProgress(scene) {
+  const map = { scene0: 0, scene1: 1, scene2a: 2, scene2b: 2, scene3a: 3, scene3b: 3 };
+  const step = map[scene] ?? 0;
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('dot' + i);
+    dot.classList.remove('active', 'done');
+    if (i < step) dot.classList.add('done');
+    else if (i === step) dot.classList.add('active');
+  }
+}
+
+// ─── START ───────────────────────────────────────────────────
+function startAnimation() {
+  document.getElementById('intro-screen').style.display = 'none';
+  initSpeech();
+  playScene('scene0');
+}
+</script>
+</body>
+</html>
