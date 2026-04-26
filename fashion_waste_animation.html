@@ -303,6 +303,39 @@
     .branch-btn { max-width: 100%; width: 100%; }
     #branch2-overlay .question-box { padding: 18px 20px; }
   }
+
+  /* NAVIGATION BUTTONS */
+  #nav-bar {
+    position: absolute;
+    top: 16px; left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    gap: 10px;
+    z-index: 6;
+    align-items: center;
+  }
+  #nav-bar.show { display: flex; }
+  .nav-btn {
+    padding: 8px 16px;
+    border-radius: 100px;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(10,14,26,0.75);
+    backdrop-filter: blur(6px);
+    color: var(--text);
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .nav-btn:hover {
+    background: rgba(56,189,248,0.15);
+    border-color: var(--accent1);
+    transform: scale(1.04);
+  }
+  .nav-btn:active { transform: scale(0.96); }
+  .nav-btn.pause-btn { min-width: 44px; justify-content: center; }
 </style>
 </head>
 <body>
@@ -319,6 +352,13 @@
   <!-- VIDEO WRAP -->
   <div id="video-wrap">
     <video id="player" playsinline webkit-playsinline></video>
+
+    <!-- NAVIGATION BAR -->
+    <div id="nav-bar">
+      <button class="nav-btn" onclick="goToStart()">⏮ 처음으로</button>
+      <button class="nav-btn" onclick="goToPrev()">◀ 이전으로</button>
+      <button class="nav-btn pause-btn" id="pause-btn" onclick="togglePause()">⏸</button>
+    </div>
 
     <!-- LOADING -->
     <div id="loading"><div class="spinner"></div></div>
@@ -373,11 +413,13 @@
 // GitHub Pages, Google Drive 공유링크 등 HTTPS URL이어야 합니다.
 const VIDEOS = {
   scene0:  'https://gogoom77-bot.github.io/fashion-waste/scene_0_intro.mp4',
-  scene1:  'https://gogoom77-bot.github.io/fashion-waste/scene_1_fastfashion.mp4.mp4',
+  scene1:  'https://gogoom77-bot.github.io/fashion-waste/scene_1_fastfashion.mp4',
   scene2a: 'https://gogoom77-bot.github.io/fashion-waste/scene_2a_problem.mp4',
   scene2b: 'https://gogoom77-bot.github.io/fashion-waste/scene_2b_solution.mp4',
   scene3a: 'https://gogoom77-bot.github.io/fashion-waste/scene_3a_correct.mp4',
   scene3b: 'https://gogoom77-bot.github.io/fashion-waste/scene_3b_wrong.mp4',
+  scene3c: 'https://gogoom77-bot.github.io/fashion-waste/scene_3c_correct.mp4',
+  scene3d: 'https://gogoom77-bot.github.io/fashion-waste/scene_3d_wrong.mp4',
 };
 
 // ─── QUESTIONS & ANSWERS ─────────────────────────────────────
@@ -400,6 +442,8 @@ let currentBranch = null;
 let recognition = null;
 let isListening = false;
 let speechSupported = false;
+let isPaused = false;
+let sceneHistory = [];
 
 const player = document.getElementById('player');
 const loading = document.getElementById('loading');
@@ -515,7 +559,8 @@ function evaluateAnswer(heard) {
 
 function skipToWrong() {
   hideBranch2();
-  playScene('scene3b');
+  const wrongScene = currentBranch === '2a' ? 'scene3b' : 'scene3d';
+  playScene(wrongScene);
 }
 
 // ─── FEEDBACK ────────────────────────────────────────────────
@@ -531,7 +576,12 @@ function showFeedback(correct, heard) {
   overlay.classList.add('active');
   setTimeout(() => {
     overlay.classList.remove('active');
-    playScene(correct ? 'scene3a' : 'scene3b');
+    // 2a → 3a/3b, 2b → 3c/3d
+    if (currentBranch === '2a') {
+      playScene(correct ? 'scene3a' : 'scene3b');
+    } else {
+      playScene(correct ? 'scene3c' : 'scene3d');
+    }
   }, 2000);
 }
 
@@ -551,9 +601,48 @@ function loadAndPlay(src) {
 }
 
 function playScene(scene) {
+  if (currentScene) sceneHistory.push(currentScene);
   currentScene = scene;
+  isPaused = false;
+  document.getElementById('pause-btn').textContent = '⏸';
   updateProgress(scene);
+  document.getElementById('nav-bar').classList.add('show');
   loadAndPlay(VIDEOS[scene]);
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────────
+function goToStart() {
+  hideAllOverlays();
+  sceneHistory = [];
+  playScene('scene0');
+}
+
+function goToPrev() {
+  hideAllOverlays();
+  if (sceneHistory.length === 0) { goToStart(); return; }
+  const prev = sceneHistory.pop();
+  currentScene = null;
+  playScene(prev);
+  // 이전으로 돌아갈 때 방금 push된 현재씬 제거
+  sceneHistory.pop();
+}
+
+function togglePause() {
+  if (isPaused) {
+    player.play().catch(() => {});
+    isPaused = false;
+    document.getElementById('pause-btn').textContent = '⏸';
+  } else {
+    player.pause();
+    isPaused = true;
+    document.getElementById('pause-btn').textContent = '▶';
+  }
+}
+
+function hideAllOverlays() {
+  document.getElementById('branch1-overlay').classList.remove('active');
+  hideBranch2();
+  document.getElementById('feedback-overlay').classList.remove('active');
 }
 
 player.addEventListener('ended', onVideoEnded);
@@ -599,7 +688,7 @@ function hideBranch2() {
 
 // ─── PROGRESS ────────────────────────────────────────────────
 function updateProgress(scene) {
-  const map = { scene0: 0, scene1: 1, scene2a: 2, scene2b: 2, scene3a: 3, scene3b: 3 };
+  const map = { scene0: 0, scene1: 1, scene2a: 2, scene2b: 2, scene3a: 3, scene3b: 3, scene3c: 3, scene3d: 3 };
   const step = map[scene] ?? 0;
   for (let i = 0; i < 4; i++) {
     const dot = document.getElementById('dot' + i);
