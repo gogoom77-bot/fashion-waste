@@ -370,8 +370,9 @@
     <!-- NAVIGATION BAR -->
     <div id="nav-bar">
       <button class="nav-btn" onclick="goToStart()">⏮ 처음으로</button>
-      <button class="nav-btn" onclick="goToPrev()">◀ 이전으로</button>
+      <button class="nav-btn" onclick="goToPrev()">◀ 이전</button>
       <button class="nav-btn pause-btn" id="pause-btn" onclick="togglePause()">⏸</button>
+      <button class="nav-btn" onclick="goToNext()">다음 ▶</button>
     </div>
 
     <!-- LOADING -->
@@ -408,7 +409,7 @@
       <div class="feedback-icon" id="feedback-icon"></div>
       <div class="feedback-text" id="feedback-text"></div>
       <div class="feedback-sub" id="feedback-sub"></div>
-      <button id="retry-btn" onclick="retryQuestion()">🔄 다시하기</button>
+      <button id="retry-btn" onclick="retryQuestion()" style="display:none"></button>
     </div>
 
     <!-- PROGRESS -->
@@ -424,8 +425,6 @@
 
 <script>
 // ─── VIDEO SOURCES ───────────────────────────────────────────
-// 영상 파일을 호스팅한 후 아래 URL을 교체하세요.
-// GitHub Pages, Google Drive 공유링크 등 HTTPS URL이어야 합니다.
 const VIDEOS = {
   scene0:  'https://gogoom77-bot.github.io/fashion-waste/scene_0_intro.mp4',
   scene1:  'https://gogoom77-bot.github.io/fashion-waste/scene_1_fastfashion.mp4',
@@ -451,19 +450,147 @@ const QUESTIONS = {
   },
 };
 
-// ─── STATE ───────────────────────────────────────────────────
-let currentScene = null;
+// ─── STAGE DEFINITIONS ───────────────────────────────────────
+// 각 스테이지는 { type, ... } 형태
+// type: 'video' | 'branch1' | 'quiz'
+// 이전/다음은 stageIndex 기준으로 이동
+
+const STAGES = [
+  { id: 's0',    type: 'video',   scene: 'scene0',  next: 's1' },
+  { id: 's1',    type: 'video',   scene: 'scene1',  next: 'branch1' },
+  { id: 'branch1', type: 'branch1', next2a: 's2a', next2b: 's2b' },
+  { id: 's2a',   type: 'video',   scene: 'scene2a', next: 'quiz2a' },
+  { id: 's2b',   type: 'video',   scene: 'scene2b', next: 'quiz2b' },
+  { id: 'quiz2a', type: 'quiz',   branch: '2a',     correct: 's3a', wrong: 's3b' },
+  { id: 'quiz2b', type: 'quiz',   branch: '2b',     correct: 's3c', wrong: 's3d' },
+  { id: 's3a',   type: 'video',   scene: 'scene3a', next: null },
+  { id: 's3b',   type: 'video',   scene: 'scene3b', next: null },
+  { id: 's3c',   type: 'video',   scene: 'scene3c', next: null },
+  { id: 's3d',   type: 'video',   scene: 'scene3d', next: null },
+];
+
+const STAGE_MAP = {};
+STAGES.forEach(s => STAGE_MAP[s.id] = s);
+
+// 이전/다음 이동을 위한 선형 순서 (분기별)
+// 각 스테이지의 prev를 동적으로 계산하기 위해 히스토리 스택 사용
+let stageHistory = []; // 방문한 stageId 스택
+let currentStageId = null;
 let currentBranch = null;
 let recognition = null;
 let isListening = false;
 let speechSupported = false;
 let isPaused = false;
-let sceneHistory = [];
 
 const player = document.getElementById('player');
 const loading = document.getElementById('loading');
 
-// ─── SPEECH RECOGNITION SETUP ────────────────────────────────
+// ─── STAGE RUNNER ─────────────────────────────────────────────
+function goToStage(stageId, pushHistory = true) {
+  hideAllOverlays();
+  if (pushHistory && currentStageId) stageHistory.push(currentStageId);
+  currentStageId = stageId;
+  const stage = STAGE_MAP[stageId];
+  isPaused = false;
+  document.getElementById('pause-btn').textContent = '⏸';
+  document.getElementById('nav-bar').classList.add('show');
+  updateProgress(stageId);
+
+  if (stage.type === 'video') {
+    loadAndPlay(VIDEOS[stage.scene]);
+  } else if (stage.type === 'branch1') {
+    // scene1 영상을 마지막 프레임에서 정지한 채 버튼 표시
+    showBranch1UI();
+  } else if (stage.type === 'quiz') {
+    currentBranch = stage.branch;
+    showBranch2UI();
+  }
+}
+
+// ─── VIDEO ENDED HANDLER ─────────────────────────────────────
+player.addEventListener('ended', () => {
+  const stage = STAGE_MAP[currentStageId];
+  if (!stage || !stage.next) return;
+  goToStage(stage.next);
+});
+
+// ─── NAVIGATION ──────────────────────────────────────────────
+function goToStart() {
+  stageHistory = [];
+  goToStage('s0', false);
+}
+
+function goToPrev() {
+  if (stageHistory.length === 0) return;
+  const prev = stageHistory.pop();
+  goToStage(prev, false);
+}
+
+function goToNext() {
+  const stage = STAGE_MAP[currentStageId];
+  if (!stage) return;
+
+  if (stage.type === 'video') {
+    // 영상 중간이어도 바로 다음 스테이지로
+    if (stage.next) goToStage(stage.next);
+  } else if (stage.type === 'branch1') {
+    // 분기 화면에서 다음: 마지막으로 선택한 경로 또는 기본 2a
+    const nextId = currentBranch === '2b' ? 's2b' : 's2a';
+    goToStage(nextId);
+  } else if (stage.type === 'quiz') {
+    // 퀴즈에서 다음: 힌트 영상으로 바로 이동
+    goToStage(stage.wrong);
+  }
+}
+
+function togglePause() {
+  if (isPaused) {
+    player.play().catch(() => {});
+    isPaused = false;
+    document.getElementById('pause-btn').textContent = '⏸';
+  } else {
+    player.pause();
+    isPaused = true;
+    document.getElementById('pause-btn').textContent = '▶';
+  }
+}
+
+// ─── BRANCH 1 UI ─────────────────────────────────────────────
+function showBranch1UI() {
+  player.pause();
+  document.getElementById('branch1-overlay').classList.add('active');
+}
+
+function chooseBranch(branch) {
+  currentBranch = branch;
+  document.getElementById('branch1-overlay').classList.remove('active');
+  goToStage(branch === '2a' ? 's2a' : 's2b');
+}
+
+// ─── BRANCH 2 / QUIZ UI ──────────────────────────────────────
+function showBranch2UI() {
+  player.pause();
+  document.getElementById('q-text').textContent = QUESTIONS[currentBranch].text;
+  document.getElementById('speech-result').textContent = '';
+  document.getElementById('branch2-overlay').classList.add('active');
+  if (!speechSupported) {
+    document.getElementById('mic-hint').textContent =
+      'Speech not supported. Use the Skip button below.';
+  }
+}
+
+function hideBranch2() {
+  stopListening();
+  document.getElementById('branch2-overlay').classList.remove('active');
+}
+
+function skipToWrong() {
+  hideBranch2();
+  const stage = STAGE_MAP[currentStageId];
+  goToStage(stage.wrong);
+}
+
+// ─── SPEECH RECOGNITION ──────────────────────────────────────
 function initSpeech() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { speechSupported = false; return; }
@@ -475,8 +602,7 @@ function initSpeech() {
   recognition.maxAlternatives = 5;
 
   recognition.onresult = (e) => {
-    let interim = '';
-    let final = '';
+    let interim = '', final = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const t = e.results[i][0].transcript;
       if (e.results[i].isFinal) final += t;
@@ -484,61 +610,20 @@ function initSpeech() {
     }
     const heard = (final || interim).toLowerCase().trim();
     document.getElementById('speech-result').textContent = heard ? `"${heard}"` : '';
-    if (final) {
-      stopListening();
-      evaluateAnswer(heard);
-    }
+    if (final) { stopListening(); evaluateAnswer(heard); }
   };
 
   recognition.onerror = (e) => {
     stopListening();
-    if (e.error === 'no-speech') {
+    if (e.error === 'no-speech')
       document.getElementById('speech-result').textContent = 'No speech detected. Try again.';
-    } else if (e.error === 'not-allowed') {
+    else if (e.error === 'not-allowed')
       document.getElementById('speech-result').textContent = 'Microphone access denied. Please allow mic access.';
-    }
   };
 
   recognition.onend = () => { stopListening(); };
 }
 
-// ─── LEVENSHTEIN DISTANCE ────────────────────────────────────
-function levenshtein(a, b) {
-  const m = a.length, n = b.length;
-  const dp = Array.from({length: m+1}, (_, i) =>
-    Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0)
-  );
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = a[i-1] === b[j-1]
-        ? dp[i-1][j-1]
-        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-  return dp[m][n];
-}
-
-function similarity(a, b) {
-  const maxLen = Math.max(a.length, b.length);
-  if (maxLen === 0) return 1;
-  return 1 - levenshtein(a, b) / maxLen;
-}
-
-function isCorrect(heard, branch) {
-  const q = QUESTIONS[branch];
-  const heardWords = heard.toLowerCase().split(/\s+/);
-  for (const keyword of q.keywords) {
-    // 1) 전체 문장에 키워드 포함 여부
-    if (heard.includes(keyword)) return true;
-    // 2) 유사도 기반 (각 단어 vs 키워드)
-    for (const word of heardWords) {
-      if (similarity(word, keyword) >= q.threshold) return true;
-    }
-    // 3) 전체 문장 vs 키워드 유사도
-    if (similarity(heard, keyword) >= q.threshold) return true;
-  }
-  return false;
-}
-
-// ─── MIC CONTROL ─────────────────────────────────────────────
 function toggleListening() {
   if (isListening) { stopListening(); return; }
   if (!speechSupported) {
@@ -572,167 +657,75 @@ function evaluateAnswer(heard) {
   showFeedback(correct, heard);
 }
 
-function skipToWrong() {
-  hideBranch2();
-  const wrongScene = currentBranch === '2a' ? 'scene3b' : 'scene3d';
-  playScene(wrongScene);
+// ─── LEVENSHTEIN ─────────────────────────────────────────────
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, (_, i) =>
+    Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0)
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function similarity(a, b) {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+function isCorrect(heard, branch) {
+  const q = QUESTIONS[branch];
+  const heardWords = heard.toLowerCase().split(/\s+/);
+  for (const keyword of q.keywords) {
+    if (heard.includes(keyword)) return true;
+    for (const word of heardWords) {
+      if (similarity(word, keyword) >= q.threshold) return true;
+    }
+    if (similarity(heard, keyword) >= q.threshold) return true;
+  }
+  return false;
 }
 
 // ─── FEEDBACK ────────────────────────────────────────────────
-let feedbackTimeout = null;
-let lastCorrect = false;
-
 function showFeedback(correct, heard) {
   hideBranch2();
-  lastCorrect = correct;
   const overlay = document.getElementById('feedback-overlay');
-  const retryBtn = document.getElementById('retry-btn');
   document.getElementById('feedback-icon').textContent = correct ? '✅' : '❌';
-  document.getElementById('feedback-text').textContent = correct
-    ? 'Great answer!' : 'Not quite!';
+  document.getElementById('feedback-text').textContent = correct ? 'Great answer!' : 'Not quite!';
   document.getElementById('feedback-sub').textContent = correct
     ? `"${heard}" — that's right!`
     : `You said: "${heard}". Let's try again with a hint.`;
-
-  // 다시하기 버튼: 오답일 때만 표시
-  retryBtn.classList.toggle('show', !correct);
-
   overlay.classList.add('active');
 
-  // 정답이면 2초 후 자동 이동, 오답이면 자동 이동 없음
-  if (correct) {
-    feedbackTimeout = setTimeout(() => {
-      overlay.classList.remove('active');
-      retryBtn.classList.remove('show');
-      if (currentBranch === '2a') playScene('scene3a');
-      else playScene('scene3c');
-    }, 2000);
-  } else {
-    // 오답: 3초 후 자동으로 힌트 영상으로 이동 (다시하기 안 누르면)
-    feedbackTimeout = setTimeout(() => {
-      overlay.classList.remove('active');
-      retryBtn.classList.remove('show');
-      if (currentBranch === '2a') playScene('scene3b');
-      else playScene('scene3d');
-    }, 3500);
-  }
-}
-
-function retryQuestion() {
-  // 타이머 취소 후 음성인식 다시 시작
-  if (feedbackTimeout) clearTimeout(feedbackTimeout);
-  document.getElementById('feedback-overlay').classList.remove('active');
-  document.getElementById('retry-btn').classList.remove('show');
-  showBranch2();
+  const stage = STAGE_MAP[currentStageId];
+  setTimeout(() => {
+    overlay.classList.remove('active');
+    goToStage(correct ? stage.correct : stage.wrong);
+  }, 2000);
 }
 
 // ─── VIDEO CONTROL ───────────────────────────────────────────
 function loadAndPlay(src) {
-  loading.classList.add('show');
   player.src = src;
   player.load();
-  player.oncanplay = () => {
-    loading.classList.remove('show');
-    player.play().catch(() => {});
-  };
-  player.onerror = () => {
-    loading.classList.remove('show');
-    console.error('Video load error:', src);
-  };
-}
-
-function playScene(scene) {
-  if (currentScene) sceneHistory.push(currentScene);
-  currentScene = scene;
-  isPaused = false;
-  document.getElementById('pause-btn').textContent = '⏸';
-  updateProgress(scene);
-  document.getElementById('nav-bar').classList.add('show');
-  loadAndPlay(VIDEOS[scene]);
-}
-
-// ─── NAVIGATION ──────────────────────────────────────────────
-function goToStart() {
-  hideAllOverlays();
-  sceneHistory = [];
-  playScene('scene0');
-}
-
-function goToPrev() {
-  hideAllOverlays();
-  if (sceneHistory.length === 0) { goToStart(); return; }
-  const prev = sceneHistory.pop();
-  currentScene = null;
-  playScene(prev);
-  // 이전으로 돌아갈 때 방금 push된 현재씬 제거
-  sceneHistory.pop();
-}
-
-function togglePause() {
-  if (isPaused) {
-    player.play().catch(() => {});
-    isPaused = false;
-    document.getElementById('pause-btn').textContent = '⏸';
-  } else {
-    player.pause();
-    isPaused = true;
-    document.getElementById('pause-btn').textContent = '▶';
-  }
-}
-
-function hideAllOverlays() {
-  document.getElementById('branch1-overlay').classList.remove('active');
-  hideBranch2();
-  document.getElementById('feedback-overlay').classList.remove('active');
-  document.getElementById('retry-btn').classList.remove('show');
-  if (feedbackTimeout) clearTimeout(feedbackTimeout);
-}
-
-player.addEventListener('ended', onVideoEnded);
-
-function onVideoEnded() {
-  if (currentScene === 'scene0') {
-    playScene('scene1');
-  } else if (currentScene === 'scene1') {
-    showBranch1();
-  } else if (currentScene === 'scene2a' || currentScene === 'scene2b') {
-    currentBranch = currentScene === 'scene2a' ? '2a' : '2b';
-    showBranch2();
-  }
-  // scene3a, scene3b: 영상 종료 후 아무것도 안 함 (마지막)
-}
-
-// ─── BRANCH CONTROL ──────────────────────────────────────────
-function showBranch1() {
-  document.getElementById('branch1-overlay').classList.add('active');
-}
-function hideBranch1() {
-  document.getElementById('branch1-overlay').classList.remove('active');
-}
-
-function chooseBranch(branch) {
-  hideBranch1();
-  playScene(branch === '2a' ? 'scene2a' : 'scene2b');
-}
-
-function showBranch2() {
-  document.getElementById('q-text').textContent = QUESTIONS[currentBranch].text;
-  document.getElementById('speech-result').textContent = '';
-  document.getElementById('branch2-overlay').classList.add('active');
-  if (!speechSupported) {
-    document.getElementById('mic-hint').textContent =
-      'Speech not supported. Use the Skip button below.';
-  }
-}
-function hideBranch2() {
-  stopListening();
-  document.getElementById('branch2-overlay').classList.remove('active');
+  player.oncanplay = () => { player.play().catch(() => {}); };
+  player.onerror = () => { console.error('Video load error:', src); };
 }
 
 // ─── PROGRESS ────────────────────────────────────────────────
-function updateProgress(scene) {
-  const map = { scene0: 0, scene1: 1, scene2a: 2, scene2b: 2, scene3a: 3, scene3b: 3, scene3c: 3, scene3d: 3 };
-  const step = map[scene] ?? 0;
+function updateProgress(stageId) {
+  const map = {
+    s0: 0, s1: 1,
+    branch1: 1,
+    s2a: 2, s2b: 2,
+    quiz2a: 2, quiz2b: 2,
+    s3a: 3, s3b: 3, s3c: 3, s3d: 3,
+  };
+  const step = map[stageId] ?? 0;
   for (let i = 0; i < 4; i++) {
     const dot = document.getElementById('dot' + i);
     dot.classList.remove('active', 'done');
@@ -741,11 +734,18 @@ function updateProgress(scene) {
   }
 }
 
+// ─── HIDE ALL OVERLAYS ───────────────────────────────────────
+function hideAllOverlays() {
+  document.getElementById('branch1-overlay').classList.remove('active');
+  hideBranch2();
+  document.getElementById('feedback-overlay').classList.remove('active');
+}
+
 // ─── START ───────────────────────────────────────────────────
 function startAnimation() {
   document.getElementById('intro-screen').style.display = 'none';
   initSpeech();
-  playScene('scene0');
+  goToStage('s0', false);
 }
 </script>
 </body>
